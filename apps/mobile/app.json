@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "NutriOS",
+    "slug": "nutrios",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "scheme": "nutrios",
+    "newArchEnabled": true,
+    "ios": {
+      "bundleIdentifier": "mx.nutrios.app",
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "mx.nutrios.app"
+    },
+    "plugins": ["expo-router"]
+  }
+}

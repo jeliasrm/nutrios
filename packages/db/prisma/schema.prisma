@@ -1,0 +1,505 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===========================================================
+// Group 1 — Platform
+// ===========================================================
+
+model Tenant {
+  id                String   @id @default(uuid()) @db.Uuid
+  name              String   @db.VarChar(100)
+  subdomain         String   @unique @db.VarChar(30)
+  plan              String   @default("free") @db.VarChar(20)
+  stripeCustomerId  String?  @map("stripe_customer_id") @db.VarChar(100)
+  status            String   @default("active") @db.VarChar(20)
+  settings          Json     @default("{}")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  users             User[]
+  subscriptions     Subscription[]
+  patients          Patient[]
+  consultations     Consultation[]
+  dietPlans         DietPlan[]
+  dietPlanTemplates DietPlanTemplate[]
+  foodCatalogItems  FoodCatalog[]
+  appointments      Appointment[]
+  payments          Payment[]
+  invoices          Invoice[]
+  memberships       Membership[]
+  notifications     Notification[]
+  documents         Document[]
+  auditLogs         AuditLog[]
+
+  @@map("tenants")
+}
+
+model User {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  email     String   @db.VarChar(255)
+  name      String   @db.VarChar(100)
+  role      String   @db.VarChar(20) // superadmin|admin|nutriologo|recepcionista|paciente
+  avatarUrl String?  @map("avatar_url")
+  phone     String?  @db.VarChar(20)
+  password  String   @db.VarChar(255)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant         Tenant          @relation(fields: [tenantId], references: [id])
+  patient        Patient?
+  consultationsAsNutritionist Consultation[] @relation("NutritionistConsultations")
+  dietPlansAsNutritionist     DietPlan[]     @relation("NutritionistDietPlans")
+  templatesCreated            DietPlanTemplate[] @relation("TemplateCreator")
+  appointmentsAsNutritionist  Appointment[]  @relation("NutritionistAppointments")
+  availability                Availability[]
+  notifications               Notification[]
+  auditLogs                   AuditLog[]
+
+  @@unique([tenantId, email])
+  @@map("users")
+}
+
+model Subscription {
+  id               String   @id @default(uuid()) @db.Uuid
+  tenantId         String   @map("tenant_id") @db.Uuid
+  plan             String   @db.VarChar(20)
+  status           String   @db.VarChar(20)
+  stripeSubId      String?  @map("stripe_sub_id") @db.VarChar(100)
+  currentPeriodEnd DateTime? @map("current_period_end")
+  seats            Int      @default(1)
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@map("subscriptions")
+}
+
+// ===========================================================
+// Group 2 — Patients & Records
+// ===========================================================
+
+model Patient {
+  id                String   @id @default(uuid()) @db.Uuid
+  tenantId          String   @map("tenant_id") @db.Uuid
+  userId            String   @unique @map("user_id") @db.Uuid
+  dob               DateTime @db.Date
+  sex               String   @db.VarChar(1) // M|F
+  bloodType         String?  @map("blood_type") @db.VarChar(5)
+  allergies         String[] @default([])
+  chronicConditions String[] @default([]) @map("chronic_conditions")
+  emergencyContact  Json?    @map("emergency_contact")
+  curp              String?  @db.VarChar(18)
+  rfc               String?  @db.VarChar(13)
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  tenant            Tenant          @relation(fields: [tenantId], references: [id])
+  user              User            @relation(fields: [userId], references: [id])
+  consultations     Consultation[]
+  dietPlans         DietPlan[]
+  foodFrequencies   FoodFrequency[]
+  groceryListSaves  GroceryListSave[]
+  appointments      Appointment[]
+  payments          Payment[]
+  memberships       Membership[]
+  documents         Document[]
+
+  @@map("patients")
+}
+
+model Consultation {
+  id              String   @id @default(uuid()) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  patientId       String   @map("patient_id") @db.Uuid
+  nutritionistId  String   @map("nutritionist_id") @db.Uuid
+  date            DateTime @db.Timestamptz()
+  reason          String?  @db.Text
+  diagnosis       String?  @db.Text
+  notes           String?  @db.Text
+  status          String   @default("scheduled") @db.VarChar(20)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  tenant              Tenant               @relation(fields: [tenantId], references: [id])
+  patient             Patient              @relation(fields: [patientId], references: [id])
+  nutritionist        User                 @relation("NutritionistConsultations", fields: [nutritionistId], references: [id])
+  anthropometrics     Anthropometric[]
+  nutritionalDiagnosis NutritionalDiagnosis?
+  foodRecall24h       FoodRecall24h[]
+
+  @@map("consultations")
+}
+
+model Anthropometric {
+  id              String  @id @default(uuid()) @db.Uuid
+  consultationId  String  @map("consultation_id") @db.Uuid
+  weightKg        Decimal @map("weight_kg") @db.Decimal(5, 2)
+  heightCm        Decimal @map("height_cm") @db.Decimal(5, 1)
+  bmi             Decimal @db.Decimal(4, 1)
+  bodyFatPct      Decimal? @map("body_fat_pct") @db.Decimal(4, 1)
+  muscleMassKg    Decimal? @map("muscle_mass_kg") @db.Decimal(5, 2)
+  waistCm         Decimal? @map("waist_cm") @db.Decimal(5, 1)
+  hipCm           Decimal? @map("hip_cm") @db.Decimal(5, 1)
+  armCm           Decimal? @map("arm_cm") @db.Decimal(5, 1)
+  calfCm          Decimal? @map("calf_cm") @db.Decimal(5, 1)
+  skinFolds       Json?   @map("skin_folds")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  consultation Consultation @relation(fields: [consultationId], references: [id])
+
+  @@map("anthropometrics")
+}
+
+model NutritionalDiagnosis {
+  id              String  @id @default(uuid()) @db.Uuid
+  consultationId  String  @unique @map("consultation_id") @db.Uuid
+  classification  String  @db.VarChar(50)
+  cie10Code       String? @map("cie10_code") @db.VarChar(10)
+  whoCategory     String? @map("who_category") @db.VarChar(50)
+  notes           String? @db.Text
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  consultation Consultation @relation(fields: [consultationId], references: [id])
+
+  @@map("nutritional_diagnosis")
+}
+
+model FoodRecall24h {
+  id              String   @id @default(uuid()) @db.Uuid
+  consultationId  String   @map("consultation_id") @db.Uuid
+  recallDate      DateTime @map("recall_date") @db.Date
+  meals           Json
+  totalKcal       Decimal  @map("total_kcal") @db.Decimal(7, 1)
+  analysis        Json?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  consultation Consultation @relation(fields: [consultationId], references: [id])
+
+  @@map("food_recall_24h")
+}
+
+model FoodFrequency {
+  id        String   @id @default(uuid()) @db.Uuid
+  patientId String   @map("patient_id") @db.Uuid
+  filledAt  DateTime @map("filled_at")
+  responses Json
+  createdAt DateTime @default(now()) @map("created_at")
+
+  patient Patient @relation(fields: [patientId], references: [id])
+
+  @@map("food_frequency")
+}
+
+// ===========================================================
+// Group 3 — Diet Plans
+// ===========================================================
+
+model DietPlanTemplate {
+  id              String   @id @default(uuid()) @db.Uuid
+  tenantId        String?  @map("tenant_id") @db.Uuid
+  name            String   @db.VarChar(200)
+  category        String   @db.VarChar(50)
+  targetKcal      Decimal  @map("target_kcal") @db.Decimal(7, 1)
+  macros          Json
+  smaeEquivalents Json     @map("smae_equivalents")
+  tags            String[] @default([])
+  createdBy       String   @map("created_by") @db.Uuid
+  isPublic        Boolean  @default(false) @map("is_public")
+  templateDays    Json     @default("[]") @map("template_days")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  tenant    Tenant? @relation(fields: [tenantId], references: [id])
+  creator   User    @relation("TemplateCreator", fields: [createdBy], references: [id])
+  dietPlans DietPlan[]
+
+  @@map("diet_plan_templates")
+}
+
+model DietPlan {
+  id              String   @id @default(uuid()) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  patientId       String   @map("patient_id") @db.Uuid
+  nutritionistId  String   @map("nutritionist_id") @db.Uuid
+  templateId      String?  @map("template_id") @db.Uuid
+  name            String   @db.VarChar(200)
+  startDate       DateTime @map("start_date") @db.Date
+  endDate         DateTime? @map("end_date") @db.Date
+  totalKcal       Decimal  @map("total_kcal") @db.Decimal(7, 1)
+  macros          Json
+  smaeEquivalents Json     @map("smae_equivalents")
+  status          String   @default("draft") @db.VarChar(20)
+  aiGenerated     Boolean  @default(false) @map("ai_generated")
+  notes           String?  @db.Text
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  tenant          Tenant            @relation(fields: [tenantId], references: [id])
+  patient         Patient           @relation(fields: [patientId], references: [id])
+  nutritionist    User              @relation("NutritionistDietPlans", fields: [nutritionistId], references: [id])
+  template        DietPlanTemplate? @relation(fields: [templateId], references: [id])
+  days            DietPlanDay[]
+  groceryListSaves GroceryListSave[]
+
+  @@map("diet_plans")
+}
+
+model DietPlanDay {
+  id         String  @id @default(uuid()) @db.Uuid
+  dietPlanId String  @map("diet_plan_id") @db.Uuid
+  dayLabel   String  @map("day_label") @db.VarChar(10)
+  position   Int
+  totalKcal  Decimal @map("total_kcal") @db.Decimal(7, 1)
+  macros     Json
+
+  dietPlan DietPlan       @relation(fields: [dietPlanId], references: [id], onDelete: Cascade)
+  meals    DietPlanMeal[]
+
+  @@map("diet_plan_days")
+}
+
+model DietPlanMeal {
+  id        String  @id @default(uuid()) @db.Uuid
+  dayId     String  @map("day_id") @db.Uuid
+  mealType  String  @map("meal_type") @db.VarChar(20)
+  position  Int
+  name      String  @db.VarChar(100)
+  totalKcal Decimal @map("total_kcal") @db.Decimal(7, 1)
+  macros    Json
+
+  day   DietPlanDay      @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  items DietPlanMealItem[]
+
+  @@map("diet_plan_meals")
+}
+
+model DietPlanMealItem {
+  id              String  @id @default(uuid()) @db.Uuid
+  mealId          String  @map("meal_id") @db.Uuid
+  foodId          String  @map("food_id") @db.Uuid
+  quantityG       Decimal @map("quantity_g") @db.Decimal(8, 2)
+  quantityDisplay String  @map("quantity_display") @db.VarChar(50)
+  unit            String  @db.VarChar(20)
+  kcal            Decimal @db.Decimal(7, 1)
+  proteinG        Decimal @map("protein_g") @db.Decimal(6, 2)
+  carbsG          Decimal @map("carbs_g") @db.Decimal(6, 2)
+  fatG            Decimal @map("fat_g") @db.Decimal(6, 2)
+  smaeGroup       String  @map("smae_group") @db.VarChar(30)
+  smaeEquivalents Decimal @map("smae_equivalents") @db.Decimal(4, 1)
+  position        Int
+  notes           String? @db.Text
+
+  meal DietPlanMeal @relation(fields: [mealId], references: [id], onDelete: Cascade)
+  food FoodCatalog  @relation(fields: [foodId], references: [id])
+
+  @@map("diet_plan_meal_items")
+}
+
+model FoodCatalog {
+  id                   String   @id @default(uuid()) @db.Uuid
+  tenantId             String?  @map("tenant_id") @db.Uuid
+  name                 String   @db.VarChar(200)
+  brand                String?  @db.VarChar(100)
+  kcalPer100g          Decimal  @map("kcal_per_100g") @db.Decimal(7, 1)
+  proteinG             Decimal  @map("protein_g") @db.Decimal(6, 2)
+  carbsG               Decimal  @map("carbs_g") @db.Decimal(6, 2)
+  fatG                 Decimal  @map("fat_g") @db.Decimal(6, 2)
+  fiberG               Decimal  @default(0) @map("fiber_g") @db.Decimal(6, 2)
+  smaeGroup            String   @map("smae_group") @db.VarChar(30)
+  smaeEquivPerPortion  Decimal  @map("smae_equiv_per_portion") @db.Decimal(4, 1)
+  portionSizeG         Decimal  @map("portion_size_g") @db.Decimal(6, 1)
+  portionLabel         String   @map("portion_label") @db.VarChar(100)
+  purchaseUnit         String   @map("purchase_unit") @db.VarChar(10)
+  gPerPiece            Decimal? @map("g_per_piece") @db.Decimal(7, 1)
+  commercialRoundup    Decimal  @default(1) @map("commercial_roundup") @db.Decimal(7, 1)
+  tags                 String[] @default([])
+  aliases              String[] @default([])
+  isVerified           Boolean  @default(false) @map("is_verified")
+  isPublic             Boolean  @default(true) @map("is_public")
+  source               String?  @db.VarChar(20)
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  tenant    Tenant?            @relation(fields: [tenantId], references: [id])
+  mealItems DietPlanMealItem[]
+
+  @@map("food_catalog")
+}
+
+// ===========================================================
+// Group 4 — Grocery
+// ===========================================================
+
+model GroceryListSave {
+  id            String   @id @default(uuid()) @db.Uuid
+  patientId     String   @map("patient_id") @db.Uuid
+  dietPlanId    String   @map("diet_plan_id") @db.Uuid
+  period        Int
+  generatedAt   DateTime @default(now()) @map("generated_at")
+  items         Json
+  pdfR2Key      String?  @map("pdf_r2_key")
+  sharedAt      DateTime? @map("shared_at")
+  sharedChannel String?  @map("shared_channel") @db.VarChar(20)
+
+  patient  Patient  @relation(fields: [patientId], references: [id])
+  dietPlan DietPlan @relation(fields: [dietPlanId], references: [id])
+
+  @@map("grocery_list_saves")
+}
+
+// ===========================================================
+// Group 5 — Agenda, Payments, Communication
+// ===========================================================
+
+model Appointment {
+  id              String    @id @default(uuid()) @db.Uuid
+  tenantId        String    @map("tenant_id") @db.Uuid
+  patientId       String    @map("patient_id") @db.Uuid
+  nutritionistId  String    @map("nutritionist_id") @db.Uuid
+  startAt         DateTime  @map("start_at") @db.Timestamptz()
+  endAt           DateTime  @map("end_at") @db.Timestamptz()
+  type            String    @db.VarChar(20) // presencial|virtual|seguimiento
+  status          String    @default("scheduled") @db.VarChar(20)
+  notes           String?   @db.Text
+  reminderSentAt  DateTime? @map("reminder_sent_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  tenant       Tenant   @relation(fields: [tenantId], references: [id])
+  patient      Patient  @relation(fields: [patientId], references: [id])
+  nutritionist User     @relation("NutritionistAppointments", fields: [nutritionistId], references: [id])
+  payments     Payment[]
+
+  @@map("appointments")
+}
+
+model Availability {
+  id              String  @id @default(uuid()) @db.Uuid
+  nutritionistId  String  @map("nutritionist_id") @db.Uuid
+  dayOfWeek       Int     @map("day_of_week") // 0-6
+  startTime       String  @map("start_time") @db.VarChar(5) // HH:mm
+  endTime         String  @map("end_time") @db.VarChar(5)
+  isActive        Boolean @default(true) @map("is_active")
+
+  nutritionist User @relation(fields: [nutritionistId], references: [id])
+
+  @@map("availability")
+}
+
+model Payment {
+  id              String    @id @default(uuid()) @db.Uuid
+  tenantId        String    @map("tenant_id") @db.Uuid
+  patientId       String    @map("patient_id") @db.Uuid
+  appointmentId   String?   @map("appointment_id") @db.Uuid
+  amount          Decimal   @db.Decimal(10, 2)
+  method          String    @db.VarChar(20)
+  status          String    @default("pending") @db.VarChar(20)
+  conektaOrderId  String?   @map("conekta_order_id") @db.VarChar(100)
+  paidAt          DateTime? @map("paid_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id])
+  patient     Patient      @relation(fields: [patientId], references: [id])
+  appointment Appointment? @relation(fields: [appointmentId], references: [id])
+  invoice     Invoice?
+
+  @@map("payments")
+}
+
+model Invoice {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  paymentId String   @unique @map("payment_id") @db.Uuid
+  cfdiUuid  String?  @map("cfdi_uuid") @db.VarChar(36)
+  xmlUrl    String?  @map("xml_url")
+  pdfUrl    String?  @map("pdf_url")
+  status    String   @default("pending") @db.VarChar(20)
+  cfdiData  Json?    @map("cfdi_data")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id])
+  payment Payment @relation(fields: [paymentId], references: [id])
+
+  @@map("invoices")
+}
+
+model Membership {
+  id            String    @id @default(uuid()) @db.Uuid
+  tenantId      String    @map("tenant_id") @db.Uuid
+  patientId     String    @map("patient_id") @db.Uuid
+  planName      String    @map("plan_name") @db.VarChar(100)
+  sessionsTotal Int       @map("sessions_total")
+  sessionsUsed  Int       @default(0) @map("sessions_used")
+  validUntil    DateTime  @map("valid_until") @db.Date
+  price         Decimal   @db.Decimal(10, 2)
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id])
+  patient Patient @relation(fields: [patientId], references: [id])
+
+  @@map("memberships")
+}
+
+model Notification {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  type      String    @db.VarChar(50)
+  channel   String    @db.VarChar(20) // email|whatsapp|push
+  payload   Json
+  sentAt    DateTime? @map("sent_at")
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@map("notifications")
+}
+
+model Document {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  patientId  String   @map("patient_id") @db.Uuid
+  name       String   @db.VarChar(200)
+  type       String   @db.VarChar(50)
+  r2Key      String   @map("r2_key")
+  sizeBytes  Int      @map("size_bytes")
+  uploadedBy String   @map("uploaded_by") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id])
+  patient Patient @relation(fields: [patientId], references: [id])
+
+  @@map("documents")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  action    String   @db.VarChar(50)
+  entity    String   @db.VarChar(50)
+  entityId  String   @map("entity_id") @db.Uuid
+  diff      Json?
+  ip        String?  @db.VarChar(45)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@index([tenantId, entity, entityId])
+  @@map("audit_logs")
+}

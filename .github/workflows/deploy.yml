@@ -1,0 +1,87 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build web + api
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    outputs:
+      web_artifact: web-build
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages + apps
+        run: pnpm build
+        env:
+          NEXT_PUBLIC_API_URL: https://api.nutrios.mx
+          NEXT_PUBLIC_PLATFORM_DOMAIN: nutrios.mx
+
+      - name: Upload web build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: apps/web/.next
+          retention-days: 3
+
+  deploy-web:
+    name: Cloudflare Pages (web)
+    needs: build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-build
+          path: apps/web/.next
+
+      - name: Publish to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy apps/web/.next --project-name=nutrios-web --branch=main
+
+  deploy-api:
+    name: Hostinger VPS (api)
+    needs: build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - name: SSH deploy to VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: deploy
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            cd /srv/nutrios/api
+            git pull origin main
+            pnpm install --frozen-lockfile
+            pnpm --filter @nutrios/db db:generate
+            pnpm --filter @nutrios/db exec prisma migrate deploy || true
+            pnpm --filter @nutrios/api build
+            pm2 reload nutrios-api
