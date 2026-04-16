@@ -19,6 +19,10 @@ export const registerTenantSchema = z.object({
   adminPassword: z.string().min(8),
 })
 
+export const refreshTokenSchema = z.object({
+  refreshToken: z.string().min(20),
+})
+
 // --- Patients ---
 
 export const createPatientSchema = z.object({
@@ -56,6 +60,7 @@ export const groceryListSchema = z.object({
 // --- Re-exports ---
 export type LoginInput = z.infer<typeof loginSchema>
 export type RegisterTenantInput = z.infer<typeof registerTenantSchema>
+export type RefreshTokenInput = z.infer<typeof refreshTokenSchema>
 export type CreatePatientInput = z.infer<typeof createPatientSchema>
 export type CreateDietPlanInput = z.infer<typeof createDietPlanSchema>
 export type GroceryListInput = z.infer<typeof groceryListSchema>

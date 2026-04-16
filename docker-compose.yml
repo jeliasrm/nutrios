@@ -1,0 +1,37 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: nutrios_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nutrios
+      POSTGRES_PASSWORD: nutrios_dev
+      POSTGRES_DB: nutrios_dev
+    ports:
+      - '5434:5432'
+    volumes:
+      - nutrios_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U nutrios -d nutrios_dev']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: nutrios_redis
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'yes', '--requirepass', 'nutrios_dev']
+    ports:
+      - '6381:6379'
+    volumes:
+      - nutrios_redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', '-a', 'nutrios_dev', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  nutrios_pg_data:
+  nutrios_redis_data:

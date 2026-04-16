@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   loginSchema,
   registerTenantSchema,
+  refreshTokenSchema,
   createPatientSchema,
   createDietPlanSchema,
   groceryListSchema,
@@ -97,6 +98,16 @@ describe('createDietPlanSchema', () => {
       macros: { kcal: 1800, protein_g: 100, carbs_g: 200, fat_g: 60 },
     })
     expect(bad.success).toBe(false)
+  })
+})
+
+describe('refreshTokenSchema', () => {
+  it('accepts long token strings', () => {
+    expect(refreshTokenSchema.safeParse({ refreshToken: 'a'.repeat(40) }).success).toBe(true)
+  })
+
+  it('rejects short token strings', () => {
+    expect(refreshTokenSchema.safeParse({ refreshToken: 'short' }).success).toBe(false)
   })
 })
 
