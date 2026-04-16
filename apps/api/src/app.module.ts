@@ -3,6 +3,8 @@ import { HealthModule } from './health/health.module'
 import { PrismaModule } from './prisma/prisma.module'
 import { RedisModule } from './redis/redis.module'
 import { AuthModule } from './auth/auth.module'
+import { TrpcModule } from './trpc/trpc.module'
+import { TrpcMiddleware } from './trpc/trpc.middleware'
 import { TenantMiddleware } from './common/tenant.middleware'
 import { loadEnv } from './config/env'
 
@@ -18,11 +20,13 @@ const env = loadEnv()
       accessTtl: env.JWT_ACCESS_TTL,
       refreshTtl: env.JWT_REFRESH_TTL,
     }),
+    TrpcModule,
     HealthModule,
   ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
     consumer.apply(TenantMiddleware).forRoutes('*')
+    consumer.apply(TrpcMiddleware).forRoutes('/trpc/*')
   }
 }

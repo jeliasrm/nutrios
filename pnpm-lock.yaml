@@ -62,12 +62,18 @@ importers:
       '@nutrios/diet-engine':
         specifier: workspace:*
         version: link:../../packages/diet-engine
+      '@nutrios/trpc':
+        specifier: workspace:*
+        version: link:../../packages/trpc
       '@nutrios/types':
         specifier: workspace:*
         version: link:../../packages/types
       '@nutrios/validations':
         specifier: workspace:*
         version: link:../../packages/validations
+      '@trpc/server':
+        specifier: ^11
+        version: 11.16.0(typescript@5.9.3)
       bcryptjs:
         specifier: ^3.0.3
         version: 3.0.3
@@ -270,10 +276,35 @@ importers:
         version: 3.2.4(@types/node@22.19.17)(jiti@2.6.1)(lightningcss@1.27.0)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.3)
 
   packages/trpc:
+    dependencies:
+      '@nutrios/db':
+        specifier: workspace:*
+        version: link:../db
+      '@nutrios/diet-engine':
+        specifier: workspace:*
+        version: link:../diet-engine
+      '@nutrios/types':
+        specifier: workspace:*
+        version: link:../types
+      '@nutrios/validations':
+        specifier: workspace:*
+        version: link:../validations
+      '@trpc/server':
+        specifier: ^11.16.0
+        version: 11.16.0(typescript@5.9.3)
+      bcryptjs:
+        specifier: ^3.0.3
+        version: 3.0.3
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
     devDependencies:
       '@nutrios/config':
         specifier: workspace:*
         version: link:../config
+      '@types/bcryptjs':
+        specifier: ^3.0.0
+        version: 3.0.0
       '@vitest/coverage-v8':
         specifier: ^3.0.0
         version: 3.2.4(vitest@3.2.4(@types/node@22.19.17)(jiti@2.6.1)(lightningcss@1.27.0)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.3))
@@ -2283,6 +2314,12 @@ packages:
 
   '@tokenizer/token@0.3.0':
     resolution: {integrity: sha512-OvjF+z51L3ov0OyAU0duzsYuvO01PH7x4t6DJx+guahgTnBHkhJdG7soQeTSFLWN3efnHyibZ4Z8l2EuWwJN3A==}
+
+  '@trpc/server@11.16.0':
+    resolution: {integrity: sha512-XgGuUMddrUTd04+za/WE5GFuZ1/YU9XQG0t3VL5WOIu2JspkOlq6k4RYEiqS6HSJt+S0RXaPdIoE2anIP/BBRQ==}
+    hasBin: true
+    peerDependencies:
+      typescript: '>=5.7.2'
 
   '@turbo/darwin-64@2.9.6':
     resolution: {integrity: sha512-X/56SnVXIQZBLKwniGTwEQTGmtE5brSACnKMBWpY3YafuxVYefrC2acamfjgxP7BG5w3I+6jf0UrLoSzgPcSJg==}
@@ -8611,6 +8648,10 @@ snapshots:
       - supports-color
 
   '@tokenizer/token@0.3.0': {}
+
+  '@trpc/server@11.16.0(typescript@5.9.3)':
+    dependencies:
+      typescript: 5.9.3
 
   '@turbo/darwin-64@2.9.6':
     optional: true

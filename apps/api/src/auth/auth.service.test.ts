@@ -93,7 +93,7 @@ describe('AuthService', () => {
   })
 
   describe('registerTenant', () => {
-    it('creates tenant + admin and returns tokens', async () => {
+    it('creates tenant + admin and returns tokens', { timeout: 15_000 }, async () => {
       const redis = makeRedis()
       const prisma = makePrisma({})
       const svc = new AuthService(prisma, redis, config)

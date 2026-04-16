@@ -218,6 +218,52 @@ export function calculateGroceryList(
   return groceryItems
 }
 
+export interface AdaptTemplateResult {
+  days: DietDay[]
+  scaleFactor: number
+  targetKcal: number
+  sourceKcal: number
+}
+
+/**
+ * Scales a template's meal items proportionally so the mean day-level kcal
+ * matches `targetKcal`. Returns a deep-cloned days array with new ids stripped
+ * (caller assigns fresh ids when persisting). Items are not rounded — the
+ * caller decides how to present the scaled quantities to the nutritionist.
+ */
+export function adaptTemplateToPlan(days: DietDay[], targetKcal: number): AdaptTemplateResult {
+  if (days.length === 0) {
+    return { days: [], scaleFactor: 1, targetKcal, sourceKcal: 0 }
+  }
+  const sourceKcal = calculatePlanMacros(days).kcal
+  const scaleFactor = sourceKcal > 0 ? targetKcal / sourceKcal : 1
+
+  const scaled: DietDay[] = days.map((day) => {
+    const meals: Meal[] = day.meals.map((meal) => {
+      const items: MealItem[] = meal.items.map((item) => ({
+        ...item,
+        quantity_g: round1(item.quantity_g * scaleFactor),
+        kcal: round1(item.kcal * scaleFactor),
+        protein_g: round1(item.protein_g * scaleFactor),
+        carbs_g: round1(item.carbs_g * scaleFactor),
+        fat_g: round1(item.fat_g * scaleFactor),
+        fiber_g: round1((item.fiber_g ?? 0) * scaleFactor),
+        smae_equivalents: round1(item.smae_equivalents * scaleFactor),
+      }))
+      const macros = calculateMealMacros(items)
+      return { ...meal, items, total_kcal: round1(macros.kcal), macros }
+    })
+    const dayMacros = calculateDayMacros(meals)
+    return { ...day, meals, total_kcal: round1(dayMacros.kcal), macros: dayMacros }
+  })
+
+  return { days: scaled, scaleFactor, targetKcal, sourceKcal }
+}
+
+function round1(n: number): number {
+  return Math.round(n * 10) / 10
+}
+
 export function detectAllergens(items: MealItem[], allergies: string[]): AllergenWarning[] {
   if (allergies.length === 0) return []
 

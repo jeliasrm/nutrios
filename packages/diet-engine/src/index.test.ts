@@ -7,6 +7,7 @@ import {
   calculateSMAEEquivalents,
   calculateGroceryList,
   detectAllergens,
+  adaptTemplateToPlan,
 } from './index'
 
 const makeItem = (over: Partial<MealItem> = {}): MealItem => ({
@@ -357,5 +358,42 @@ describe('detectAllergens', () => {
     const items = [makeItem({ food_name: 'Leche con cacahuate' })]
     const warnings = detectAllergens(items, ['leche', 'cacahuate'])
     expect(warnings).toHaveLength(2)
+  })
+})
+
+describe('adaptTemplateToPlan', () => {
+  it('scales quantities so mean day kcal matches target', () => {
+    const items = [makeItem({ kcal: 100, protein_g: 10, carbs_g: 20, fat_g: 5, quantity_g: 50 })]
+    const day = makeDay([makeMeal(items)])
+    const result = adaptTemplateToPlan([day], 200)
+    expect(result.scaleFactor).toBe(2)
+    expect(result.days[0]!.meals[0]!.items[0]!.kcal).toBe(200)
+    expect(result.days[0]!.meals[0]!.items[0]!.quantity_g).toBe(100)
+    expect(result.days[0]!.total_kcal).toBe(200)
+  })
+
+  it('returns empty result for empty template', () => {
+    expect(adaptTemplateToPlan([], 1800)).toEqual({
+      days: [],
+      scaleFactor: 1,
+      targetKcal: 1800,
+      sourceKcal: 0,
+    })
+  })
+
+  it('leaves scale at 1 when template kcal is zero', () => {
+    const items = [makeItem({ kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0 })]
+    const day = makeDay([makeMeal(items)])
+    const result = adaptTemplateToPlan([day], 1800)
+    expect(result.scaleFactor).toBe(1)
+    expect(result.days[0]!.total_kcal).toBe(0)
+  })
+
+  it('averages source kcal across multiple days', () => {
+    const d1 = makeDay([makeMeal([makeItem({ kcal: 800 })])], { id: 'd1' })
+    const d2 = makeDay([makeMeal([makeItem({ kcal: 1200 })])], { id: 'd2' })
+    const result = adaptTemplateToPlan([d1, d2], 1500)
+    expect(result.sourceKcal).toBe(1000)
+    expect(result.scaleFactor).toBe(1.5)
   })
 })
